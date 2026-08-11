@@ -1,324 +1,658 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DeepLive Face Effects</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepLive Avatar</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
-  <style>
-    * {
-      box-sizing: border-box;
-    }
+<style>
+*{box-sizing:border-box}
 
-    body {
-      margin: 0;
-      background: #0b0b12;
-      color: white;
-      font-family: Arial, sans-serif;
-      text-align: center;
-    }
+body{
+  margin:0;
+  background:#09090f;
+  color:white;
+  font-family:Arial,sans-serif;
+  text-align:center;
+}
 
-    header {
-      padding: 24px 15px;
-      background: #151522;
-    }
+header{
+  padding:20px;
+  background:#151522;
+}
 
-    h1 {
-      margin: 0;
-      font-size: 34px;
-    }
+h1{margin:0;font-size:32px}
 
-    p {
-      color: #aaa;
-    }
+.container{
+  width:95%;
+  max-width:900px;
+  margin:20px auto;
+}
 
-    .camera-box {
-      width: 94%;
-      max-width: 850px;
-      margin: 25px auto;
-      background: #171720;
-      padding: 18px;
-      border-radius: 18px;
-    }
+.stage{
+  position:relative;
+  width:100%;
+  background:#000;
+  border-radius:18px;
+  overflow:hidden;
+}
 
-    .video-container {
-      position: relative;
-      width: 100%;
-      overflow: hidden;
-      border-radius: 14px;
-      background: black;
-    }
+video{
+  width:100%;
+  display:block;
+  transform:scaleX(-1);
+}
 
-    video {
-      display: block;
-      width: 100%;
-      transform: scaleX(-1);
-    }
+canvas{
+  position:absolute;
+  left:0;
+  top:0;
+  width:100%;
+  height:100%;
+  transform:scaleX(-1);
+}
 
-    canvas {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      transform: scaleX(-1);
-      pointer-events: none;
-    }
+.controls{
+  background:#151522;
+  padding:18px;
+  border-radius:15px;
+  margin-top:15px;
+}
 
-    button {
-      border: 0;
-      border-radius: 10px;
-      padding: 13px 20px;
-      margin: 10px 5px;
-      font-size: 16px;
-      cursor: pointer;
-    }
+button{
+  padding:12px 18px;
+  margin:5px;
+  border:0;
+  border-radius:10px;
+  cursor:pointer;
+  font-size:15px;
+}
 
-    #start {
-      background: white;
-      color: black;
-    }
+.avatar{
+  background:#29293a;
+  color:white;
+}
 
-    #stop {
-      background: #33333f;
-      color: white;
-    }
+.active{
+  outline:3px solid white;
+}
 
-    #effect {
-      background: #6c5ce7;
-      color: white;
-    }
+.start{
+  background:white;
+  color:black;
+}
 
-    .status {
-      margin-top: 10px;
-      color: #aaa;
-    }
-  </style>
+.stop{
+  background:#444;
+  color:white;
+}
+
+#status{
+  color:#aaa;
+  margin-top:12px;
+}
+</style>
 </head>
 
 <body>
 
 <header>
   <h1>DeepLive</h1>
-  <p>Real-Time Face Effects</p>
+  <p>Live Avatar Studio</p>
 </header>
 
-<div class="camera-box">
+<div class="container">
 
-  <div class="video-container">
+  <div class="stage">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
   </div>
 
-  <button id="start">Start Camera</button>
-  <button id="stop">Stop Camera</button>
-  <button id="effect">Face Effect: OFF</button>
+  <div class="controls">
 
-  <div class="status" id="status">
-    Camera is off
+    <h3>Choose your avatar</h3>
+
+    <button class="avatar active" data-avatar="1">
+      Avatar 1
+    </button>
+
+    <button class="avatar" data-avatar="2">
+      Avatar 2
+    </button>
+
+    <button class="avatar" data-avatar="3">
+      Avatar 3
+    </button>
+
+    <br>
+
+    <button class="start" id="start">
+      Start Camera
+    </button>
+
+    <button class="stop" id="stop">
+      Stop Camera
+    </button>
+
+    <div id="status">
+      Camera is off
+    </div>
+
   </div>
 
 </div>
 
 <script>
-  const video = document.getElementById("video");
-  const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d");
 
-  const startButton = document.getElementById("start");
-  const stopButton = document.getElementById("stop");
-  const effectButton = document.getElementById("effect");
-  const status = document.getElementById("status");
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
-  let stream = null;
-  let effectOn = false;
+const startButton = document.getElementById("start");
+const stopButton = document.getElementById("stop");
+const status = document.getElementById("status");
 
-  const faceMesh = new FaceMesh({
-    locateFile: (file) => {
-      return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
-    }
+let stream = null;
+let selectedAvatar = 1;
+let latestPose = null;
+
+/* -----------------------------
+   AVATAR SELECTION
+----------------------------- */
+
+document.querySelectorAll(".avatar").forEach(button => {
+
+  button.addEventListener("click", () => {
+
+    document.querySelectorAll(".avatar")
+      .forEach(b => b.classList.remove("active"));
+
+    button.classList.add("active");
+
+    selectedAvatar =
+      Number(button.dataset.avatar);
   });
 
-  faceMesh.setOptions({
-    maxNumFaces: 1,
-    refineLandmarks: true,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5
-  });
+});
 
-  faceMesh.onResults((results) => {
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+/* -----------------------------
+   MEDIAPIPE POSE
+----------------------------- */
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+const pose = new Pose({
+  locateFile: file =>
+    `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+});
 
-    if (!effectOn) {
-      return;
+pose.setOptions({
+
+  modelComplexity: 1,
+
+  smoothLandmarks: true,
+
+  enableSegmentation: false,
+
+  minDetectionConfidence: 0.5,
+
+  minTrackingConfidence: 0.5
+
+});
+
+
+pose.onResults(results => {
+
+  latestPose =
+    results.poseLandmarks || null;
+
+});
+
+
+/* -----------------------------
+   CAMERA
+----------------------------- */
+
+const camera = new Camera(video, {
+
+  onFrame: async () => {
+
+    if(video.readyState >= 2){
+
+      await pose.send({
+        image: video
+      });
+
     }
 
-    if (
-      results.multiFaceLandmarks &&
-      results.multiFaceLandmarks.length > 0
-    ) {
+  },
 
-      const landmarks = results.multiFaceLandmarks[0];
+  width:1280,
 
-      /*
-        Draw a simple glowing face outline.
-        This demonstrates real-time face tracking.
-      */
+  height:720
 
-      ctx.beginPath();
+});
 
-      const facePoints = [
-        10, 338, 297, 332, 284,
-        251, 389, 356, 454, 323,
-        361, 288, 397, 365, 379,
-        378, 400, 377, 152, 148,
-        176, 149, 150, 136, 172,
-        58, 132, 93, 234, 127,
-        162, 21, 54, 103, 67
-      ];
 
-      facePoints.forEach((index, i) => {
+startButton.onclick = async () => {
 
-        const point = landmarks[index];
+  try{
 
-        const x = point.x * canvas.width;
-        const y = point.y * canvas.height;
+    stream =
+      await navigator.mediaDevices.getUserMedia({
 
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
+        video:{
+          facingMode:"user"
+        },
+
+        audio:false
 
       });
 
-      ctx.closePath();
+    video.srcObject = stream;
 
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = "rgba(255,255,255,0.9)";
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = "white";
-      ctx.stroke();
+    await video.play();
 
-      /*
-        Add two small tracking markers near the eyes.
-      */
+    camera.start();
 
-      const leftEye = landmarks[33];
-      const rightEye = landmarks[263];
+    status.textContent =
+      "Camera and body tracking are running.";
 
-      drawMarker(
-        leftEye.x * canvas.width,
-        leftEye.y * canvas.height
-      );
+    draw();
 
-      drawMarker(
-        rightEye.x * canvas.width,
-        rightEye.y * canvas.height
-      );
-    }
-  });
+  }catch(error){
 
-  function drawMarker(x, y) {
+    console.error(error);
 
-    ctx.beginPath();
+    status.textContent =
+      "Camera permission was denied.";
 
-    ctx.arc(x, y, 8, 0, Math.PI * 2);
-
-    ctx.fillStyle = "white";
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = "white";
-
-    ctx.fill();
   }
 
-  const camera = new Camera(video, {
-    onFrame: async () => {
-      await faceMesh.send({ image: video });
-    },
-    width: 1280,
-    height: 720
-  });
+};
 
-  startButton.addEventListener("click", async () => {
 
-    try {
+stopButton.onclick = () => {
 
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "user"
-        },
-        audio: false
-      });
+  if(stream){
 
-      video.srcObject = stream;
+    stream.getTracks().forEach(track =>
+      track.stop()
+    );
 
-      await video.play();
+    stream = null;
 
-      camera.start();
+  }
 
-      status.textContent = "Camera is running";
+  video.srcObject = null;
 
-    } catch (error) {
+  latestPose = null;
 
-      console.error(error);
+  ctx.clearRect(
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
 
-      status.textContent =
-        "Camera permission was denied or unavailable.";
+  status.textContent =
+    "Camera is off.";
 
-    }
-  });
+};
 
-  stopButton.addEventListener("click", () => {
 
-    if (stream) {
+/* -----------------------------
+   DRAW LOOP
+----------------------------- */
 
-      stream.getTracks().forEach(track => track.stop());
+function draw(){
 
-      video.srcObject = null;
+  if(!stream) return;
 
-      stream = null;
+  canvas.width =
+    video.videoWidth || 1280;
 
-      status.textContent = "Camera is off";
-    }
-  });
+  canvas.height =
+    video.videoHeight || 720;
 
-  effectButton.addEventListener("click", () => {
+  ctx.clearRect(
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
 
-    effectOn = !effectOn;
+  if(latestPose){
 
-    if (effectOn) {
+    drawAvatar(
+      latestPose
+    );
 
-      effectButton.textContent =
-        "Face Effect: ON";
+  }
 
-      status.textContent =
-        "Face tracking is active";
+  requestAnimationFrame(draw);
 
-    } else {
+}
 
-      effectButton.textContent =
-        "Face Effect: OFF";
 
-      ctx.clearRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      );
+/* -----------------------------
+   AVATAR DRAWING
+----------------------------- */
 
-      status.textContent =
-        "Camera is running";
+function point(index){
 
-    }
-  });
+  const p =
+    latestPose[index];
+
+  return {
+
+    x:p.x * canvas.width,
+
+    y:p.y * canvas.height
+
+  };
+
+}
+
+
+function drawAvatar(landmarks){
+
+  /*
+    MediaPipe landmarks:
+    0 = nose
+    11 = left shoulder
+    12 = right shoulder
+    23 = left hip
+    24 = right hip
+  */
+
+  const nose = point(0);
+
+  const leftShoulder =
+    point(11);
+
+  const rightShoulder =
+    point(12);
+
+  const leftHip =
+    point(23);
+
+  const rightHip =
+    point(24);
+
+
+  const shoulderWidth =
+    Math.abs(
+      rightShoulder.x -
+      leftShoulder.x
+    );
+
+
+  const centerX =
+    (leftShoulder.x +
+     rightShoulder.x) / 2;
+
+
+  /* HEAD */
+
+  let headSize =
+    Math.max(
+      45,
+      shoulderWidth * 0.42
+    );
+
+
+  /* BODY SIZE */
+
+  let bodyWidth =
+    Math.max(
+      80,
+      shoulderWidth * 1.15
+    );
+
+
+  let bodyHeight =
+    Math.max(
+      130,
+      Math.abs(
+        leftHip.y -
+        leftShoulder.y
+      ) * 1.2
+    );
+
+
+  /* AVATAR COLORS */
+
+  let skin;
+  let hair;
+  let shirt;
+
+  if(selectedAvatar === 1){
+
+    skin = "#f0b58b";
+    hair = "#24170f";
+    shirt = "#7c4dff";
+
+  }
+
+  if(selectedAvatar === 2){
+
+    skin = "#8d5524";
+    hair = "#090909";
+    shirt = "#00b894";
+
+  }
+
+  if(selectedAvatar === 3){
+
+    skin = "#ffd1b3";
+    hair = "#d7268b";
+    shirt = "#0984e3";
+
+  }
+
+
+  /*
+    BODY
+  */
+
+  ctx.save();
+
+  ctx.translate(
+    centerX,
+    leftShoulder.y
+  );
+
+
+  ctx.fillStyle =
+    shirt;
+
+  ctx.beginPath();
+
+  ctx.roundRect(
+    -bodyWidth / 2,
+    10,
+    bodyWidth,
+    bodyHeight,
+    35
+  );
+
+  ctx.fill();
+
+
+  /*
+    NECK
+  */
+
+  ctx.fillStyle =
+    skin;
+
+  ctx.fillRect(
+    -headSize * .18,
+    -15,
+    headSize * .36,
+    35
+  );
+
+
+  /*
+    HEAD
+  */
+
+  ctx.beginPath();
+
+  ctx.ellipse(
+    nose.x - centerX,
+    nose.y - leftShoulder.y,
+    headSize * .55,
+    headSize * .68,
+    0,
+    0,
+    Math.PI * 2
+  );
+
+  ctx.fillStyle =
+    skin;
+
+  ctx.fill();
+
+
+  /*
+    HAIR
+  */
+
+  ctx.beginPath();
+
+  ctx.ellipse(
+    nose.x - centerX,
+    nose.y - leftShoulder.y -
+      headSize * .35,
+    headSize * .57,
+    headSize * .35,
+    0,
+    Math.PI,
+    Math.PI * 2
+  );
+
+  ctx.fillStyle =
+    hair;
+
+  ctx.fill();
+
+
+  /*
+    EYES
+  */
+
+  ctx.fillStyle =
+    "white";
+
+  ctx.beginPath();
+
+  ctx.arc(
+    nose.x - centerX -
+      headSize * .18,
+
+    nose.y - leftShoulder.y -
+      headSize * .05,
+
+    7,
+
+    0,
+
+    Math.PI * 2
+  );
+
+  ctx.arc(
+    nose.x - centerX +
+      headSize * .18,
+
+    nose.y - leftShoulder.y -
+      headSize * .05,
+
+    7,
+
+    0,
+
+    Math.PI * 2
+  );
+
+  ctx.fill();
+
+
+  /*
+    PUPILS
+  */
+
+  ctx.fillStyle =
+    "#111";
+
+  ctx.beginPath();
+
+  ctx.arc(
+    nose.x - centerX -
+      headSize * .18,
+
+    nose.y - leftShoulder.y -
+      headSize * .05,
+
+    3,
+
+    0,
+
+    Math.PI * 2
+  );
+
+  ctx.arc(
+    nose.x - centerX +
+      headSize * .18,
+
+    nose.y - leftShoulder.y -
+      headSize * .05,
+
+    3,
+
+    0,
+
+    Math.PI * 2
+  );
+
+  ctx.fill();
+
+
+  /*
+    SMILE
+  */
+
+  ctx.strokeStyle =
+    "#7b3024";
+
+  ctx.lineWidth = 3;
+
+  ctx.beginPath();
+
+  ctx.arc(
+    nose.x - centerX,
+
+    nose.y - leftShoulder.y +
+      headSize * .20,
+
+    headSize * .18,
+
+    0,
+
+    Math.PI
+  );
+
+  ctx.stroke();
+
+
+  ctx.restore();
+
+}
+
 </script>
 
 </body>
