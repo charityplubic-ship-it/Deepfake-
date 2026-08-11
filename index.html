@@ -2,39 +2,39 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DeepLive Avatar</title>
-
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>DeepLive</title>
 
 <style>
 *{box-sizing:border-box}
 
 body{
   margin:0;
-  background:#09090f;
-  color:white;
+  background:#08080d;
+  color:#fff;
   font-family:Arial,sans-serif;
-  text-align:center;
 }
 
 header{
   padding:20px;
-  background:#151522;
+  background:#14141e;
+  text-align:center;
 }
 
 h1{margin:0;font-size:32px}
 
-.container{
+main{
   width:95%;
-  max-width:900px;
+  max-width:1100px;
   margin:20px auto;
 }
 
 .stage{
   position:relative;
   width:100%;
+  max-width:900px;
+  margin:auto;
+  aspect-ratio:16/9;
   background:#000;
   border-radius:18px;
   overflow:hidden;
@@ -42,28 +42,30 @@ h1{margin:0;font-size:32px}
 
 video{
   width:100%;
-  display:block;
+  height:100%;
+  object-fit:cover;
   transform:scaleX(-1);
 }
 
 canvas{
   position:absolute;
-  left:0;
-  top:0;
+  inset:0;
   width:100%;
   height:100%;
-  transform:scaleX(-1);
+  pointer-events:none;
 }
 
-.controls{
-  background:#151522;
+.panel{
+  max-width:900px;
+  margin:15px auto;
   padding:18px;
-  border-radius:15px;
-  margin-top:15px;
+  background:#14141e;
+  border-radius:18px;
+  text-align:center;
 }
 
 button{
-  padding:12px 18px;
+  padding:13px 18px;
   margin:5px;
   border:0;
   border-radius:10px;
@@ -72,27 +74,36 @@ button{
 }
 
 .avatar{
-  background:#29293a;
-  color:white;
+  background:#292938;
+  color:#fff;
 }
 
-.active{
-  outline:3px solid white;
+.avatar.active{
+  outline:3px solid #fff;
 }
 
 .start{
-  background:white;
-  color:black;
+  background:#fff;
+  color:#000;
 }
 
 .stop{
   background:#444;
-  color:white;
+  color:#fff;
 }
 
 #status{
   color:#aaa;
   margin-top:12px;
+}
+
+@media(max-width:600px){
+  h1{font-size:26px}
+
+  button{
+    width:90%;
+    margin:6px auto;
+  }
 }
 </style>
 </head>
@@ -104,165 +115,192 @@ button{
   <p>Live Avatar Studio</p>
 </header>
 
-<div class="container">
+<main>
 
-  <div class="stage">
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="canvas"></canvas>
-  </div>
+<div class="stage">
 
-  <div class="controls">
+  <video
+    id="video"
+    autoplay
+    muted
+    playsinline>
+  </video>
 
-    <h3>Choose your avatar</h3>
+  <canvas id="canvas"></canvas>
 
-    <button class="avatar active" data-avatar="1">
-      Avatar 1
-    </button>
+</div>
 
-    <button class="avatar" data-avatar="2">
-      Avatar 2
-    </button>
+<div class="panel">
 
-    <button class="avatar" data-avatar="3">
-      Avatar 3
-    </button>
+  <h3>Choose Your Avatar</h3>
 
-    <br>
+  <button
+    class="avatar active"
+    data-avatar="1">
+    Avatar 1
+  </button>
 
-    <button class="start" id="start">
-      Start Camera
-    </button>
+  <button
+    class="avatar"
+    data-avatar="2">
+    Avatar 2
+  </button>
 
-    <button class="stop" id="stop">
-      Stop Camera
-    </button>
+  <button
+    class="avatar"
+    data-avatar="3">
+    Avatar 3
+  </button>
 
-    <div id="status">
-      Camera is off
-    </div>
+  <button
+    class="avatar"
+    data-avatar="4">
+    Avatar 4
+  </button>
 
+  <br>
+
+  <button
+    class="start"
+    id="start">
+    Start Camera
+  </button>
+
+  <button
+    class="stop"
+    id="stop">
+    Stop Camera
+  </button>
+
+  <div id="status">
+    Camera is off
   </div>
 
 </div>
 
+</main>
+
 <script>
 
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+const video =
+  document.getElementById("video");
 
-const startButton = document.getElementById("start");
-const stopButton = document.getElementById("stop");
-const status = document.getElementById("status");
+const canvas =
+  document.getElementById("canvas");
+
+const ctx =
+  canvas.getContext("2d");
+
+const start =
+  document.getElementById("start");
+
+const stop =
+  document.getElementById("stop");
+
+const status =
+  document.getElementById("status");
 
 let stream = null;
-let selectedAvatar = 1;
-let latestPose = null;
 
-/* -----------------------------
-   AVATAR SELECTION
------------------------------ */
+let avatar = 1;
 
-document.querySelectorAll(".avatar").forEach(button => {
+let animation = null;
 
-  button.addEventListener("click", () => {
 
-    document.querySelectorAll(".avatar")
-      .forEach(b => b.classList.remove("active"));
+/* AVATAR SETTINGS */
+
+const avatars = {
+
+  1:{
+    skin:"#f0b58b",
+    hair:"#24170f",
+    shirt:"#7c4dff"
+  },
+
+  2:{
+    skin:"#8d5524",
+    hair:"#090909",
+    shirt:"#00b894"
+  },
+
+  3:{
+    skin:"#ffd1b3",
+    hair:"#d7268b",
+    shirt:"#0984e3"
+  },
+
+  4:{
+    skin:"#d99a72",
+    hair:"#553322",
+    shirt:"#e84393"
+  }
+
+};
+
+
+/* SELECT AVATAR */
+
+document
+.querySelectorAll(".avatar")
+.forEach(button=>{
+
+  button.onclick=()=>{
+
+    document
+    .querySelectorAll(".avatar")
+    .forEach(b=>{
+      b.classList.remove("active");
+    });
 
     button.classList.add("active");
 
-    selectedAvatar =
+    avatar =
       Number(button.dataset.avatar);
-  });
+
+  };
 
 });
 
 
-/* -----------------------------
-   MEDIAPIPE POSE
------------------------------ */
+/* START CAMERA */
 
-const pose = new Pose({
-  locateFile: file =>
-    `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-});
-
-pose.setOptions({
-
-  modelComplexity: 1,
-
-  smoothLandmarks: true,
-
-  enableSegmentation: false,
-
-  minDetectionConfidence: 0.5,
-
-  minTrackingConfidence: 0.5
-
-});
-
-
-pose.onResults(results => {
-
-  latestPose =
-    results.poseLandmarks || null;
-
-});
-
-
-/* -----------------------------
-   CAMERA
------------------------------ */
-
-const camera = new Camera(video, {
-
-  onFrame: async () => {
-
-    if(video.readyState >= 2){
-
-      await pose.send({
-        image: video
-      });
-
-    }
-
-  },
-
-  width:1280,
-
-  height:720
-
-});
-
-
-startButton.onclick = async () => {
+start.onclick=async()=>{
 
   try{
 
     stream =
-      await navigator.mediaDevices.getUserMedia({
+      await navigator.mediaDevices
+      .getUserMedia({
 
         video:{
-          facingMode:"user"
+          facingMode:"user",
+          width:{
+            ideal:1280
+          },
+          height:{
+            ideal:720
+          }
         },
 
         audio:false
 
       });
 
-    video.srcObject = stream;
+    video.srcObject =
+      stream;
 
     await video.play();
 
-    camera.start();
-
     status.textContent =
-      "Camera and body tracking are running.";
+      "Camera is running";
+
+    resize();
 
     draw();
 
-  }catch(error){
+  }
+
+  catch(error){
 
     console.error(error);
 
@@ -274,21 +312,25 @@ startButton.onclick = async () => {
 };
 
 
-stopButton.onclick = () => {
+/* STOP CAMERA */
+
+stop.onclick=()=>{
 
   if(stream){
 
-    stream.getTracks().forEach(track =>
-      track.stop()
-    );
-
-    stream = null;
+    stream
+    .getTracks()
+    .forEach(track=>{
+      track.stop();
+    });
 
   }
 
-  video.srcObject = null;
+  stream=null;
 
-  latestPose = null;
+  if(animation){
+    cancelAnimationFrame(animation);
+  }
 
   ctx.clearRect(
     0,
@@ -298,24 +340,33 @@ stopButton.onclick = () => {
   );
 
   status.textContent =
-    "Camera is off.";
+    "Camera is off";
 
 };
 
 
-/* -----------------------------
-   DRAW LOOP
------------------------------ */
+/* CANVAS */
+
+function resize(){
+
+  canvas.width =
+    video.videoWidth ||
+    1280;
+
+  canvas.height =
+    video.videoHeight ||
+    720;
+
+}
+
+
+/* DRAW */
 
 function draw(){
 
-  if(!stream) return;
+  if(!stream)return;
 
-  canvas.width =
-    video.videoWidth || 1280;
-
-  canvas.height =
-    video.videoHeight || 720;
+  resize();
 
   ctx.clearRect(
     0,
@@ -324,159 +375,55 @@ function draw(){
     canvas.height
   );
 
-  if(latestPose){
+  drawAvatar();
 
-    drawAvatar(
-      latestPose
-    );
-
-  }
-
-  requestAnimationFrame(draw);
+  animation =
+    requestAnimationFrame(draw);
 
 }
 
 
-/* -----------------------------
-   AVATAR DRAWING
------------------------------ */
+/* DRAW AVATAR */
 
-function point(index){
+function drawAvatar(){
 
-  const p =
-    latestPose[index];
+  const a =
+    avatars[avatar];
 
-  return {
+  const x =
+    canvas.width/2;
 
-    x:p.x * canvas.width,
+  const y =
+    canvas.height/2;
 
-    y:p.y * canvas.height
-
-  };
-
-}
-
-
-function drawAvatar(landmarks){
-
-  /*
-    MediaPipe landmarks:
-    0 = nose
-    11 = left shoulder
-    12 = right shoulder
-    23 = left hip
-    24 = right hip
-  */
-
-  const nose = point(0);
-
-  const leftShoulder =
-    point(11);
-
-  const rightShoulder =
-    point(12);
-
-  const leftHip =
-    point(23);
-
-  const rightHip =
-    point(24);
-
-
-  const shoulderWidth =
-    Math.abs(
-      rightShoulder.x -
-      leftShoulder.x
-    );
-
-
-  const centerX =
-    (leftShoulder.x +
-     rightShoulder.x) / 2;
-
-
-  /* HEAD */
-
-  let headSize =
-    Math.max(
-      45,
-      shoulderWidth * 0.42
-    );
-
-
-  /* BODY SIZE */
-
-  let bodyWidth =
-    Math.max(
-      80,
-      shoulderWidth * 1.15
-    );
-
-
-  let bodyHeight =
-    Math.max(
-      130,
-      Math.abs(
-        leftHip.y -
-        leftShoulder.y
-      ) * 1.2
-    );
-
-
-  /* AVATAR COLORS */
-
-  let skin;
-  let hair;
-  let shirt;
-
-  if(selectedAvatar === 1){
-
-    skin = "#f0b58b";
-    hair = "#24170f";
-    shirt = "#7c4dff";
-
-  }
-
-  if(selectedAvatar === 2){
-
-    skin = "#8d5524";
-    hair = "#090909";
-    shirt = "#00b894";
-
-  }
-
-  if(selectedAvatar === 3){
-
-    skin = "#ffd1b3";
-    hair = "#d7268b";
-    shirt = "#0984e3";
-
-  }
+  const scale =
+    Math.min(
+      canvas.width,
+      canvas.height
+    )/600;
 
 
   /*
     BODY
   */
 
-  ctx.save();
-
-  ctx.translate(
-    centerX,
-    leftShoulder.y
-  );
-
-
   ctx.fillStyle =
-    shirt;
+    a.shirt;
 
   ctx.beginPath();
 
   ctx.roundRect(
-    -bodyWidth / 2,
-    10,
-    bodyWidth,
-    bodyHeight,
-    35
+
+    x-130*scale,
+
+    y-10*scale,
+
+    260*scale,
+
+    290*scale,
+
+    45*scale
+
   );
 
   ctx.fill();
@@ -487,13 +434,18 @@ function drawAvatar(landmarks){
   */
 
   ctx.fillStyle =
-    skin;
+    a.skin;
 
   ctx.fillRect(
-    -headSize * .18,
-    -15,
-    headSize * .36,
-    35
+
+    x-22*scale,
+
+    y-50*scale,
+
+    44*scale,
+
+    50*scale
+
   );
 
 
@@ -504,17 +456,25 @@ function drawAvatar(landmarks){
   ctx.beginPath();
 
   ctx.ellipse(
-    nose.x - centerX,
-    nose.y - leftShoulder.y,
-    headSize * .55,
-    headSize * .68,
+
+    x,
+
+    y-120*scale,
+
+    78*scale,
+
+    95*scale,
+
     0,
+
     0,
-    Math.PI * 2
+
+    Math.PI*2
+
   );
 
   ctx.fillStyle =
-    skin;
+    a.skin;
 
   ctx.fill();
 
@@ -523,21 +483,28 @@ function drawAvatar(landmarks){
     HAIR
   */
 
+  ctx.fillStyle =
+    a.hair;
+
   ctx.beginPath();
 
   ctx.ellipse(
-    nose.x - centerX,
-    nose.y - leftShoulder.y -
-      headSize * .35,
-    headSize * .57,
-    headSize * .35,
-    0,
-    Math.PI,
-    Math.PI * 2
-  );
 
-  ctx.fillStyle =
-    hair;
+    x,
+
+    y-175*scale,
+
+    82*scale,
+
+    52*scale,
+
+    0,
+
+    Math.PI,
+
+    Math.PI*2
+
+  );
 
   ctx.fill();
 
@@ -547,36 +514,36 @@ function drawAvatar(landmarks){
   */
 
   ctx.fillStyle =
-    "white";
+    "#fff";
 
   ctx.beginPath();
 
   ctx.arc(
-    nose.x - centerX -
-      headSize * .18,
 
-    nose.y - leftShoulder.y -
-      headSize * .05,
+    x-28*scale,
 
-    7,
+    y-125*scale,
+
+    13*scale,
 
     0,
 
-    Math.PI * 2
+    Math.PI*2
+
   );
 
   ctx.arc(
-    nose.x - centerX +
-      headSize * .18,
 
-    nose.y - leftShoulder.y -
-      headSize * .05,
+    x+28*scale,
 
-    7,
+    y-125*scale,
+
+    13*scale,
 
     0,
 
-    Math.PI * 2
+    Math.PI*2
+
   );
 
   ctx.fill();
@@ -592,34 +559,64 @@ function drawAvatar(landmarks){
   ctx.beginPath();
 
   ctx.arc(
-    nose.x - centerX -
-      headSize * .18,
 
-    nose.y - leftShoulder.y -
-      headSize * .05,
+    x-28*scale,
 
-    3,
+    y-125*scale,
+
+    5*scale,
 
     0,
 
-    Math.PI * 2
+    Math.PI*2
+
   );
 
   ctx.arc(
-    nose.x - centerX +
-      headSize * .18,
 
-    nose.y - leftShoulder.y -
-      headSize * .05,
+    x+28*scale,
 
-    3,
+    y-125*scale,
+
+    5*scale,
 
     0,
 
-    Math.PI * 2
+    Math.PI*2
+
   );
 
   ctx.fill();
+
+
+  /*
+    NOSE
+  */
+
+  ctx.strokeStyle =
+    "#9c5d43";
+
+  ctx.lineWidth =
+    3*scale;
+
+  ctx.beginPath();
+
+  ctx.moveTo(
+    x,
+    y-115*scale
+  );
+
+  ctx.lineTo(
+    x-5*scale,
+    y-90*scale
+  );
+
+  ctx.lineTo(
+    x+7*scale,
+    y-90*scale
+  );
+
+  ctx.stroke();
 
 
   /*
@@ -629,27 +626,26 @@ function drawAvatar(landmarks){
   ctx.strokeStyle =
     "#7b3024";
 
-  ctx.lineWidth = 3;
+  ctx.lineWidth =
+    3*scale;
 
   ctx.beginPath();
 
   ctx.arc(
-    nose.x - centerX,
 
-    nose.y - leftShoulder.y +
-      headSize * .20,
+    x,
 
-    headSize * .18,
+    y-78*scale,
+
+    20*scale,
 
     0,
 
     Math.PI
+
   );
 
   ctx.stroke();
-
-
-  ctx.restore();
 
 }
 
